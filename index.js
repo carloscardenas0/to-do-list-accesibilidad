@@ -5,6 +5,7 @@ const addBtn = document.querySelector(".btn-add");
 const taskTable = document.getElementById("task-table");
 const tableBody = taskTable.querySelector("tbody");
 const empty = document.querySelector(".empty");
+const notificacion = document.getElementById("notificacion");
 
 // Set today as the minimum date for the due date input
 const today = new Date().toISOString().split('T')[0];
@@ -19,7 +20,10 @@ document.querySelector("form").addEventListener("submit", (e) => {
 
     if (taskText !== "") {
         addTask(taskText, dueDate);
-        saveTasksToLocalStorage();
+        saveTasksToMemory();
+
+        // Actualiza el contenido de la región aria-live
+        notificacion.textContent = `Se ha agregado la tarea "${taskText}" a la lista.`;
 
         // Reset form
         taskInput.value = "";
@@ -75,14 +79,23 @@ function addTask(taskText, dueDate) {
 
     // Add event listener to delete button
     deleteBtn.addEventListener("click", () => {
+        const taskName = tdTask.textContent;
         tr.remove();
+
+        // Actualiza el contenido de la región aria-live para eliminación
+        notificacion.textContent = `Se ha eliminado la tarea "${taskName}" de la lista.`;
 
         if (tableBody.children.length === 0) {
             empty.style.display = "block";
             taskTable.style.display = "none";
+
+            // Notifica cuando la lista queda vacía
+            setTimeout(() => {
+                notificacion.textContent = "La lista de tareas está ahora vacía.";
+            }, 500);
         }
 
-        saveTasksToLocalStorage();
+        saveTasksToMemory();
     });
 
     tdActions.appendChild(deleteBtn);
@@ -96,41 +109,80 @@ function addTask(taskText, dueDate) {
     tableBody.appendChild(tr);
 }
 
-// Save tasks to localStorage
-function saveTasksToLocalStorage() {
-    localStorage.setItem("taskTableData", tableBody.innerHTML);
+// Store tasks data in memory (since localStorage is not available)
+let tasksData = [];
+
+// Save tasks to memory
+function saveTasksToMemory() {
+    tasksData = Array.from(tableBody.children).map(row => {
+        const cells = row.children;
+        return {
+            task: cells[0].textContent,
+            date: cells[1].textContent,
+            classes: cells[1].className,
+            ariaLabel: row.getAttribute("aria-label") || ""
+        };
+    });
 }
 
-// Load tasks from localStorage
-function loadTasksFromLocalStorage() {
-    const savedTasks = localStorage.getItem("taskTableData");
+// Load tasks from memory
+function loadTasksFromMemory() {
+    if (tasksData.length > 0) {
+        tasksData.forEach(taskData => {
+            const tr = document.createElement("tr");
+            if (taskData.ariaLabel) {
+                tr.setAttribute("aria-label", taskData.ariaLabel);
+            }
 
-    if (savedTasks) {
-        tableBody.innerHTML = savedTasks;
+            // Task cell
+            const tdTask = document.createElement("td");
+            tdTask.textContent = taskData.task;
 
-        if (tableBody.children.length > 0) {
-            empty.style.display = "none";
-            taskTable.style.display = "table";
+            // Due date cell
+            const tdDate = document.createElement("td");
+            tdDate.textContent = taskData.date;
+            if (taskData.classes) {
+                tdDate.className = taskData.classes;
+            }
 
-            // Re-attach event listeners to delete buttons
-            const deleteBtns = tableBody.querySelectorAll(".btn-delete");
-            deleteBtns.forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const row = btn.closest("tr");
-                    row.remove();
+            // Actions cell
+            const tdActions = document.createElement("td");
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn-delete";
+            deleteBtn.innerHTML = '<i class="fas fa-trash" aria-hidden="true"></i><span class="sr-only">Eliminar</span>';
+            deleteBtn.setAttribute("aria-label", "Eliminar tarea");
 
-                    if (tableBody.children.length === 0) {
-                        empty.style.display = "block";
-                        taskTable.style.display = "none";
-                    }
+            deleteBtn.addEventListener("click", () => {
+                const taskName = tdTask.textContent;
+                tr.remove();
 
-                    saveTasksToLocalStorage();
-                });
+                // Actualiza el contenido de la región aria-live para eliminación
+                notificacion.textContent = `Se ha eliminado la tarea "${taskName}" de la lista.`;
+
+                if (tableBody.children.length === 0) {
+                    empty.style.display = "block";
+                    taskTable.style.display = "none";
+
+                    // Notifica cuando la lista queda vacía
+                    setTimeout(() => {
+                        notificacion.textContent = "La lista de tareas está ahora vacía.";
+                    }, 500);
+                }
+
+                saveTasksToMemory();
             });
-        } else {
-            empty.style.display = "block";
-            taskTable.style.display = "none";
-        }
+
+            tdActions.appendChild(deleteBtn);
+
+            tr.appendChild(tdTask);
+            tr.appendChild(tdDate);
+            tr.appendChild(tdActions);
+
+            tableBody.appendChild(tr);
+        });
+
+        empty.style.display = "none";
+        taskTable.style.display = "table";
     } else {
         empty.style.display = "block";
         taskTable.style.display = "none";
@@ -138,4 +190,5 @@ function loadTasksFromLocalStorage() {
 }
 
 // Initial load
-window.addEventListener("DOMContentLoaded", loadTasksFromLocalStorage);
+window.addEventListener("DOMContentLoaded", loadTasksFromMemory);
+
